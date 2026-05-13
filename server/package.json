@@ -1,0 +1,23 @@
+{
+  "name": "server",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev:api": "bun --watch src/api.ts",
+    "dev:worker": "bun --watch src/worker.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "bullmq": "^5.76.8",
+    "hono": "^4.12.18",
+    "ioredis": "^5.10.1",
+    "openai": "^6.37.0",
+    "zod": "^4.4.3"
+  }
+}
