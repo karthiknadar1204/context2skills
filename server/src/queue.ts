@@ -2,6 +2,7 @@ import { Queue } from "bullmq";
 import IORedis from "ioredis";
 
 export const TRAINING_QUEUE = "training";
+export const INFERENCE_QUEUE = "inference";
 
 export const createBullConnection = () =>
   new IORedis(process.env.REDIS_URL || "redis://localhost:6379", {
@@ -19,5 +20,9 @@ export const createBullConnection = () =>
   });
 
 export const trainingQueue = new Queue(TRAINING_QUEUE, {
+  connection: createBullConnection(),
+});
+
+export const inferenceQueue = new Queue(INFERENCE_QUEUE, {
   connection: createBullConnection(),
 });
