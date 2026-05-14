@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { trainingQueue, inferenceQueue } from "./queue";
@@ -9,10 +10,13 @@ import {
   listTasksForContext,
   getFinalSkill,
   listProbesByKind,
+  listContexts,
 } from "./db";
 import { createContextSchema, inferRequestSchema } from "./schemas";
 
 const app = new Hono();
+
+app.use("*", cors({ origin: "*" }));
 
 app.get("/health", (c) => c.json({ ok: true }));
 
@@ -34,6 +38,18 @@ app.post("/contexts", async (c) => {
   insertContext.run(id, parsed.data.content, parsed.data.systemPrompt, createdAt);
 
   return c.json({ contextId: id }, 201);
+});
+
+app.get("/contexts", (c) => {
+  const rows = listContexts.all();
+  return c.json({
+    contexts: rows.map((r) => ({
+      id: r.id,
+      createdAt: r.created_at,
+      contentPreview: r.content_preview,
+      hasFinalSkills: r.has_final_skills === 1,
+    })),
+  });
 });
 
 app.get("/contexts/:id", (c) => {

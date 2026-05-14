@@ -85,6 +85,23 @@ export const getContextById = db.prepare<ContextRow, [string]>(
   `SELECT id, content, system_prompt, created_at FROM contexts WHERE id = ?`,
 );
 
+export type ContextListRow = {
+  id: string;
+  created_at: number;
+  content_preview: string;
+  has_final_skills: number;
+};
+
+export const listContexts = db.prepare<ContextListRow, []>(
+  `SELECT c.id,
+          c.created_at,
+          substr(c.content, 1, 200) AS content_preview,
+          CASE WHEN fs.context_id IS NOT NULL THEN 1 ELSE 0 END AS has_final_skills
+   FROM contexts c
+   LEFT JOIN final_skills fs ON c.id = fs.context_id
+   ORDER BY c.created_at DESC`,
+);
+
 export const upsertIteration = db.prepare<
   void,
   [string, number, string, string, number]
