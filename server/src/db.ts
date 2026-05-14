@@ -100,4 +100,83 @@ export const listIterations = db.prepare<IterationRow, [string]>(
    FROM iterations WHERE context_id = ? ORDER BY iter_num ASC`,
 );
 
+export type TaskRow = {
+  id: number;
+  context_id: string;
+  iter_num: number;
+  task_text: string;
+  rubrics_json: string;
+  reasoner_answer: string | null;
+  judge_verdicts: string | null;
+  solved: number;
+};
+
+export const insertTask = db.prepare<
+  { lastInsertRowid: number; changes: number },
+  [string, number, string, string]
+>(`INSERT INTO tasks (context_id, iter_num, task_text, rubrics_json)
+   VALUES (?, ?, ?, ?)`);
+
+export const updateTaskAnswer = db.prepare<void, [string, number]>(
+  `UPDATE tasks SET reasoner_answer = ? WHERE id = ?`,
+);
+
+export const updateTaskVerdict = db.prepare<void, [string, number, number]>(
+  `UPDATE tasks SET judge_verdicts = ?, solved = ? WHERE id = ?`,
+);
+
+export const listTasksForContext = db.prepare<TaskRow, [string]>(
+  `SELECT id, context_id, iter_num, task_text, rubrics_json,
+          reasoner_answer, judge_verdicts, solved
+   FROM tasks WHERE context_id = ? ORDER BY iter_num ASC, id ASC`,
+);
+
+export type ProbeRow = {
+  context_id: string;
+  kind: "hard" | "easy";
+  iter_num: number;
+  task_id: number;
+  task_text: string;
+  rubrics_json: string;
+};
+
+export const upsertProbe = db.prepare<
+  void,
+  [string, "hard" | "easy", number, number]
+>(`INSERT INTO probe_sets (context_id, kind, iter_num, task_id)
+   VALUES (?, ?, ?, ?)
+   ON CONFLICT(context_id, kind, iter_num) DO UPDATE SET
+     task_id = excluded.task_id`);
+
+export const listProbesByKind = db.prepare<ProbeRow, [string, "hard" | "easy"]>(
+  `SELECT p.context_id, p.kind, p.iter_num, p.task_id,
+          t.task_text, t.rubrics_json
+   FROM probe_sets p
+   JOIN tasks t ON t.id = p.task_id
+   WHERE p.context_id = ? AND p.kind = ?
+   ORDER BY p.iter_num ASC`,
+);
+
+export type FinalSkillRow = {
+  context_id: string;
+  selected_iter: number;
+  content: string;
+  created_at: number;
+};
+
+export const upsertFinalSkill = db.prepare<
+  void,
+  [string, number, string, number]
+>(`INSERT INTO final_skills (context_id, selected_iter, content, created_at)
+   VALUES (?, ?, ?, ?)
+   ON CONFLICT(context_id) DO UPDATE SET
+     selected_iter = excluded.selected_iter,
+     content       = excluded.content,
+     created_at    = excluded.created_at`);
+
+export const getFinalSkill = db.prepare<FinalSkillRow, [string]>(
+  `SELECT context_id, selected_iter, content, created_at
+   FROM final_skills WHERE context_id = ?`,
+);
+
 console.log(`[db] opened ${DB_PATH}`);

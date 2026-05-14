@@ -6,6 +6,9 @@ import {
   getContextById,
   insertContext,
   listIterations,
+  listTasksForContext,
+  getFinalSkill,
+  listProbesByKind,
 } from "./db";
 import { createContextSchema, inferRequestSchema } from "./schemas";
 
@@ -44,6 +47,65 @@ app.get("/contexts/:id", (c) => {
   });
 });
 
+app.get("/contexts/:id/tasks", (c) => {
+  const contextId = c.req.param("id");
+  if (!getContextById.get(contextId)) {
+    return c.json({ error: "context not found" }, 404);
+  }
+  const rows = listTasksForContext.all(contextId);
+  return c.json({
+    contextId,
+    tasks: rows.map((r) => ({
+      id: r.id,
+      iterNum: r.iter_num,
+      task: r.task_text,
+      rubrics: JSON.parse(r.rubrics_json),
+      reasonerAnswer: r.reasoner_answer,
+      judgeVerdict: r.judge_verdicts ? JSON.parse(r.judge_verdicts) : null,
+      solved: r.solved === 1,
+    })),
+  });
+});
+
+app.get("/contexts/:id/final-skills", (c) => {
+  const contextId = c.req.param("id");
+  if (!getContextById.get(contextId)) {
+    return c.json({ error: "context not found" }, 404);
+  }
+  const row = getFinalSkill.get(contextId);
+  if (!row) {
+    return c.json({ error: "no final skills yet — training not completed" }, 404);
+  }
+  return c.json({
+    contextId,
+    selectedIter: row.selected_iter,
+    content: row.content,
+    createdAt: row.created_at,
+  });
+});
+
+app.get("/contexts/:id/probes", (c) => {
+  const contextId = c.req.param("id");
+  if (!getContextById.get(contextId)) {
+    return c.json({ error: "context not found" }, 404);
+  }
+  return c.json({
+    contextId,
+    hard: listProbesByKind.all(contextId, "hard").map((p) => ({
+      iterNum: p.iter_num,
+      taskId: p.task_id,
+      task: p.task_text,
+      rubrics: JSON.parse(p.rubrics_json),
+    })),
+    easy: listProbesByKind.all(contextId, "easy").map((p) => ({
+      iterNum: p.iter_num,
+      taskId: p.task_id,
+      task: p.task_text,
+      rubrics: JSON.parse(p.rubrics_json),
+    })),
+  });
+});
+
 app.get("/contexts/:id/iterations", (c) => {
   const contextId = c.req.param("id");
   if (!getContextById.get(contextId)) {
@@ -67,9 +129,23 @@ app.post("/train/:contextId", async (c) => {
     return c.json({ error: "context not found" }, 404);
   }
 
+  let body: { M?: number; N?: number; maxTokens?: number } = {};
+  try {
+    if (c.req.header("content-length")) {
+      body = await c.req.json();
+    }
+  } catch {
+    // empty/non-JSON body — fine, use defaults
+  }
+
   const job = await trainingQueue.add(
     "train-context",
-    { contextId },
+    {
+      contextId,
+      ...(body.M ? { M: body.M } : {}),
+      ...(body.N ? { N: body.N } : {}),
+      ...(body.maxTokens ? { maxTokens: body.maxTokens } : {}),
+    },
     { removeOnComplete: 100, removeOnFail: 100 },
   );
   return c.json({ jobId: job.id, contextId });
@@ -107,14 +183,14 @@ app.post("/infer", async (c) => {
     return c.json({ error: z.flattenError(parsed.error) }, 400);
   }
 
-  const { contextId, task } = parsed.data;
+  const { contextId, task, useSkills } = parsed.data;
   if (!getContextById.get(contextId)) {
     return c.json({ error: "context not found" }, 404);
   }
 
   const job = await inferenceQueue.add(
     "infer",
-    { contextId, task },
+    { contextId, task, useSkills },
     { removeOnComplete: 100, removeOnFail: 100 },
   );
   return c.json({ jobId: job.id, contextId });
